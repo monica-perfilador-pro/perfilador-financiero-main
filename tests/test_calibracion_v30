@@ -1,0 +1,359 @@
+"""
+Tests de calibracion v3.0 — presion financiera y estabilidad.
+
+Incluye el caso real reportado por Monica:
+  edad=56, nomina, tarjeta_alta+baja, hipotecario=infonavit,
+  utilizacion ~65%, 3 productos activos, plazo 72 meses.
+  Motor v2: PRE APROBADO DIRECTO
+  Financiera real: RECHAZADO por presion y politicas
+  Motor v3 esperado: SE_VA_A_ANALISIS con condicionamientos correctos
+"""
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pytest
+from core import analizar, InputsAnalisis
+
+
+def make_input(**kwargs) -> InputsAnalisis:
+    defaults: dict = dict(
+        nombre="Test", telefono="5555555555", correo="t@t.com",
+        edad=35, ingreso=30000.0, tipo_ingreso="Nomina",
+        negocio_casa=0, antiguedad_dom=3, domicilio_id=1,
+        precio=300000.0, enganche=60000.0, plazo=60,
+        consultas=0, auto_previo=2, credinissan=2, hipotecario=3,
+        tarjeta_alta=2, tarjeta_baja=2, atrasos_mop=1,
+        enganche_disp=1, compra_mes=1, unidad_disp=1,
+        # v3 defaults
+        utilizacion_revolvente=0,
+        productos_activos=0,
+        consultas_recientes=0,
+        nivel_deuda_actual=0,
+    )
+    defaults.update(kwargs)
+    return InputsAnalisis(
+        nombre=str(defaults["nombre"]),
+        telefono=str(defaults["telefono"]),
+        correo=str(defaults["correo"]),
+        edad=int(defaults["edad"]),
+        ingreso=float(defaults["ingreso"]),
+        tipo_ingreso=str(defaults["tipo_ingreso"]),
+        negocio_casa=int(defaults["negocio_casa"]),
+        antiguedad_dom=int(defaults["antiguedad_dom"]),
+        domicilio_id=int(defaults["domicilio_id"]),
+        precio=float(defaults["precio"]),
+        enganche=float(defaults["enganche"]),
+        plazo=int(defaults["plazo"]),
+        consultas=int(defaults["consultas"]),
+        auto_previo=int(defaults["auto_previo"]),
+        credinissan=int(defaults["credinissan"]),
+        hipotecario=int(defaults["hipotecario"]),
+        tarjeta_alta=int(defaults["tarjeta_alta"]),
+        tarjeta_baja=int(defaults["tarjeta_baja"]),
+        atrasos_mop=int(defaults["atrasos_mop"]),
+        enganche_disp=int(defaults["enganche_disp"]),
+        compra_mes=int(defaults["compra_mes"]),
+        unidad_disp=int(defaults["unidad_disp"]),
+        utilizacion_revolvente=int(defaults["utilizacion_revolvente"]),
+        productos_activos=int(defaults["productos_activos"]),
+        consultas_recientes=int(defaults["consultas_recientes"]),
+        nivel_deuda_actual=int(defaults["nivel_deuda_actual"]),
+    )
+
+
+# ════════════════════════════════════════════════════════════════
+# CASO REAL — 56 años nómina, utilización alta, plazo 72
+# ════════════════════════════════════════════════════════════════
+class TestCasoRealReportado:
+
+    def caso_real(self):
+        return make_input(
+            edad=56,
+            ingreso=40000,
+            tipo_ingreso="Nomina",
+            negocio_casa=2,
+            antiguedad_dom=3,
+            domicilio_id=1,
+            precio=290000,
+            enganche=85000,
+            plazo=72,
+            consultas=3,
+            auto_previo=2,
+            credinissan=2,
+            hipotecario=2,       # infonavit
+            tarjeta_alta=1,
+            tarjeta_baja=1,
+            atrasos_mop=1,
+            # v3: presion y estabilidad
+            utilizacion_revolvente=65,   # BBVA 73% + Banamex 44% ~promedio
+            productos_activos=3,         # hipoteca + 2 tarjetas
+            consultas_recientes=3,
+            nivel_deuda_actual=2,        # media
+        )
+
+    def test_no_es_directo_ni_automatico(self):
+        """Motor v3 no debe dar DIRECTO ni AUTOMATICO a este perfil."""
+        r = analizar(self.caso_real())
+        assert r.plan not in ("AUTOMATICO", "DIRECTO"), (
+            f"Caso real no debe ser AUTOMATICO/DIRECTO. Plan: {r.plan}"
+        )
+
+    def test_va_a_analisis_o_condicionado(self):
+        """Debe ir a analisis manual o plan condicionado."""
+        r = analizar(self.caso_real())
+        planes_esperados = {
+            "SE_VA_A_ANALISIS",
+            "CONDICIONADO",
+            "CONDICIONADO_MOP2",
+            "RESCATE",
+        }
+        assert r.plan in planes_esperados, (
+            f"Plan esperado: {planes_esperados}, obtenido: {r.plan}"
+        )
+
+    def test_detecta_presion_financiera(self):
+        """Debe haber disparado regla de presion."""
+        r = analizar(self.caso_real())
+        reglas_presion = {
+            "PR1_ALTA", "PR1_CRITICA", "PR2_MEDIO", "PR2_ELEVADO",
+            "PR3_MEDIA", "PR3_ALTA", "PR4_MEDIA", "PR4_ALTA",
+            "PR_BLOQUEA_AUTO", "POST_PRESION", "POST_PRESION_MEDIA",
+        }
+        disparadas = set(r.reglas_disparadas)
+        tiene_presion = bool(reglas_presion & disparadas)
+        assert tiene_presion, (
+            f"Debe detectar presion financiera. "
+            f"Disparadas: {r.reglas_disparadas}"
+        )
+
+    def test_detecta_riesgo_edad_plazo(self):
+        """56 años + 72 meses = 62 al terminar. Debe detectar zona de atencion."""
+        r = analizar(self.caso_real())
+        # 56 + 6 = 62 años al terminar: ATENCION
+        reglas_estabilidad = {"EST1_ATENCION", "EST1_ALTO", "EST1_CRITICO"}
+        disparadas = set(r.reglas_disparadas)
+        tiene_edad = bool(reglas_estabilidad & disparadas)
+        assert tiene_edad, (
+            f"Debe detectar riesgo de edad+plazo (62 años al terminar). "
+            f"Disparadas: {r.reglas_disparadas}"
+        )
+
+    def test_condicionamientos_no_vacios(self):
+        """Debe generar condicionamientos especificos."""
+        r = analizar(self.caso_real())
+        assert len(r.condicionamientos) > 0, (
+            "Debe haber condicionamientos para este perfil complejo"
+        )
+
+    def test_mensaje_asesor_es_informativo(self):
+        """El mensaje debe dar contexto real al asesor."""
+        r = analizar(self.caso_real())
+        assert len(r.mensaje_asesor) > 30, (
+            f"Mensaje muy corto: {r.mensaje_asesor}"
+        )
+
+
+# ════════════════════════════════════════════════════════════════
+# PRESION FINANCIERA — casos específicos
+# ════════════════════════════════════════════════════════════════
+class TestPresionFinanciera:
+
+    def test_sin_tarjetas_no_presion_revolvente(self):
+        """Sin tarjetas no debe haber presion revolvente."""
+        r = analizar(make_input(
+            tarjeta_alta=2, tarjeta_baja=2,
+            utilizacion_revolvente=0,
+        ))
+        assert "PR1_CRITICA" not in r.reglas_disparadas
+        assert "PR1_ALTA" not in r.reglas_disparadas
+
+    def test_utilizacion_80_bloquea_automatico(self):
+        """Utilizacion >80% debe bloquear AUTOMATICO."""
+        r = analizar(make_input(
+            ingreso=80000,
+            tarjeta_alta=1,
+            credinissan=1,
+            auto_previo=1,
+            utilizacion_revolvente=85,  # critica
+            productos_activos=2,
+        ))
+        assert r.plan != "AUTOMATICO", (
+            f"Utilizacion 85% debe bloquear AUTOMATICO. Plan: {r.plan}"
+        )
+        assert "PR1_CRITICA" in r.reglas_disparadas
+
+    def test_utilizacion_baja_no_penaliza(self):
+        """Utilizacion baja no debe penalizar perfil bueno."""
+        r = analizar(make_input(
+            ingreso=80000,
+            tarjeta_alta=1,
+            credinissan=1,
+            auto_previo=1,
+            hipotecario=1,
+            utilizacion_revolvente=20,  # baja
+            productos_activos=2,
+        ))
+        # Perfil fuerte con baja utilizacion puede ser automatico
+        assert r.plan in {"AUTOMATICO", "SE_VA_A_ANALISIS"}
+
+    def test_muchos_productos_activos_bloquea(self):
+        """4+ productos activos debe bloquear AUTOMATICO."""
+        r = analizar(make_input(
+            ingreso=80000,
+            tarjeta_alta=1,
+            credinissan=1,
+            productos_activos=4,
+        ))
+        assert r.plan != "AUTOMATICO", (
+            f"4 productos activos debe bloquear AUTOMATICO. Plan: {r.plan}"
+        )
+        assert "PR2_ELEVADO" in r.reglas_disparadas
+
+    def test_presion_baja_no_afecta_aprobacion(self):
+        """Presion baja no debe cambiar decision de perfil bueno."""
+        r = analizar(make_input(
+            ingreso=80000,
+            tarjeta_alta=1,
+            credinissan=1,
+            auto_previo=1,
+            hipotecario=1,
+            utilizacion_revolvente=15,
+            productos_activos=1,
+            nivel_deuda_actual=0,
+        ))
+        # Sin presion, perfil fuerte debe ser aprobado
+        assert r.plan in {"AUTOMATICO", "SE_VA_A_ANALISIS"}
+
+
+# ════════════════════════════════════════════════════════════════
+# ESTABILIDAD ESTRUCTURAL — casos especificos
+# ════════════════════════════════════════════════════════════════
+class TestEstabilidadEstructural:
+
+    def test_60_anos_plazo_72_detecta_atencion(self):
+        """60 años + 72 meses = 66. Debe detectar zona ALTO."""
+        r = analizar(make_input(
+            edad=60, plazo=72,
+            ingreso=50000, enganche=90000, precio=300000,
+        ))
+        assert "EST1_ALTO" in r.reglas_disparadas or \
+               "EST1_CRITICO" in r.reglas_disparadas, (
+            f"60+6=66 años debe ser ALTO. Disparadas: {r.reglas_disparadas}"
+        )
+
+    def test_56_anos_plazo_72_detecta_atencion(self):
+        """56 años + 72 meses = 62. Debe detectar ATENCION."""
+        r = analizar(make_input(edad=56, plazo=72))
+        assert "EST1_ATENCION" in r.reglas_disparadas, (
+            f"56+6=62 debe ser ATENCION. Disparadas: {r.reglas_disparadas}"
+        )
+
+    def test_40_anos_plazo_60_ok(self):
+        """40 años + 60 meses = 45. Debe ser OK."""
+        r = analizar(make_input(edad=40, plazo=60))
+        assert "EST1_OK" in r.reglas_disparadas, (
+            f"40+5=45 debe ser OK. Disparadas: {r.reglas_disparadas}"
+        )
+
+    def test_65_anos_cualquier_plazo_bloquea(self):
+        """65 años + 60 meses = 70. Debe bloquear AUTOMATICO."""
+        r = analizar(make_input(
+            edad=65, plazo=60,
+            ingreso=80000,
+            tarjeta_alta=1, credinissan=1, auto_previo=1, hipotecario=1,
+        ))
+        assert r.plan != "AUTOMATICO", (
+            f"65+5=70 años debe bloquear AUTOMATICO. Plan: {r.plan}"
+        )
+        assert "EST1_CRITICO" in r.reglas_disparadas
+
+    def test_plazo_maximo_recomendado_se_calcula(self):
+        """Debe calcular plazo maximo correcto para perfil de edad."""
+        from core.estabilidad import evaluar_estabilidad
+        from core.trace import Trace
+
+        # 56 años, plazo max para terminar en <65 = (65-56)*12 = 108
+        # pero para terminar en <60 = (60-56)*12 = 48
+        inputs = make_input(edad=56, plazo=72)
+        trace = Trace()
+        from core.estabilidad import evaluar_estabilidad
+        est = evaluar_estabilidad(inputs, trace)
+
+        assert est.edad_al_terminar == 62
+        assert est.riesgo_edad_plazo == "ATENCION"
+        # Plazo recomendado deberia ser menor al actual
+        assert est.plazo_maximo_rec <= 72
+
+    def test_cotitular_joven_sugerido_en_edad_critica(self):
+        """Para edad critica debe sugerir cotitular mas joven."""
+        r = analizar(make_input(
+            edad=67, plazo=60,
+            ingreso=80000,
+            tarjeta_alta=1, credinissan=1,
+        ))
+        conds = " ".join(r.condicionamientos).upper()
+        assert "COTITULAR" in conds or "PLAZO" in conds, (
+            f"Edad critica debe sugerir cotitular o reducir plazo: {r.condicionamientos}"
+        )
+
+
+# ════════════════════════════════════════════════════════════════
+# RETROCOMPATIBILIDAD — defaults no rompen casos v2
+# ════════════════════════════════════════════════════════════════
+class TestRetrocompatibilidadV2:
+
+    def test_sin_variables_v3_funciona_igual(self):
+        """Sin las nuevas variables, el motor debe seguir funcionando."""
+        # Caso de aprobacion limpia (sin variables v3)
+        r = analizar(make_input(
+            ingreso=80000,
+            tarjeta_alta=1,
+            credinissan=1,
+            auto_previo=1,
+            hipotecario=1,
+            # NO se pasan utilizacion_revolvente, productos_activos, etc.
+            # Usan defaults (0)
+        ))
+        assert r.version_motor == "3.0.0"
+        assert r.probabilidad > 0
+        assert r.plan is not None
+
+    def test_defaults_no_penalizan_perfil_bueno(self):
+        """Los defaults (0) no deben penalizar un perfil bueno."""
+        r = analizar(make_input(
+            ingreso=80000,
+            tarjeta_alta=1,
+            credinissan=1,
+            auto_previo=1,
+            hipotecario=1,
+            enganche=90000,
+            precio=300000,
+            plazo=48,  # plazo corto, 35+4=39 años
+            edad=35,
+            # variables v3 en 0 (sin dato)
+            utilizacion_revolvente=0,
+            productos_activos=0,
+            consultas_recientes=0,
+            nivel_deuda_actual=0,
+        ))
+        # Con defaults en 0 y buen perfil, no debe penalizar
+        assert r.plan in {"AUTOMATICO", "SE_VA_A_ANALISIS"}
+
+    def test_determinismo_con_nuevas_variables(self):
+        """Mismo input v3 = mismo output siempre."""
+        inputs = make_input(
+            utilizacion_revolvente=65,
+            productos_activos=3,
+            consultas_recientes=3,
+            nivel_deuda_actual=2,
+        )
+        resultados = [analizar(inputs) for _ in range(5)]
+        primero = resultados[0]
+        for r in resultados[1:]:
+            assert r.plan == primero.plan
+            assert r.probabilidad == primero.probabilidad
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
