@@ -1008,11 +1008,9 @@ def generar_pdf_solicitud(d: dict) -> BytesIO:
         s_field(cv, 486, ref_y, 96,  14, "Parentesco",        d.get(prefijo+"parentesco",""))
 
         ref_y -= 14
-        s_field(cv, 46,  ref_y, 86, 14, "Tel. Fijo",         d.get(prefijo+"tel_fijo",""))
-        s_field(cv, 132, ref_y, 86, 14, "Tel. Oficina",      d.get(prefijo+"tel_ofi",""))
-        s_field(cv, 218, ref_y, 86, 14, "Tel. Celular",      d.get(prefijo+"tel_cel",""))
-        s_field(cv, 304, ref_y, 100, 14,"Horario Localizar",  d.get(prefijo+"horario",""))
-        s_field(cv, 404, ref_y, 178, 14, "Lugar Localizacion",d.get(prefijo+"lugar",""))
+        s_field(cv, 46,  ref_y, 130, 14, "Tel. Celular",      d.get(prefijo+"tel_cel",""))
+        s_field(cv, 176, ref_y, 100, 14, "Horario Localizar", d.get(prefijo+"horario",""))
+        s_field(cv, 276, ref_y, 306, 14, "Lugar Localizacion",d.get(prefijo+"lugar",""))
         y = ref_y - 16
 
     # Footer pagina 1
@@ -1341,10 +1339,11 @@ hr { border:none !important; border-top:1px solid #1a1a1a !important; margin:8px
 .alerta-chip.bad { background:#fff1f2; border:1px solid #fecdd3; color:#9f1239; }
 
 .cond-box {
-    background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25);
+    background: #1a0000; border: 1px solid rgba(220,38,38,0.3);
+    border-left: 3px solid #dc2626;
     border-radius: 9px; padding: 10px 14px;
     color: #dc2626; font-size: 0.76rem;
-    line-height: 1.75; margin: 4px 0; font-weight: 500;
+    line-height: 1.75; margin: 4px 0; font-weight: 600;
 }
 
 .cuenta-box {
@@ -2231,10 +2230,25 @@ if st.session_state.get("resultado") and st.session_state.get("mostrar_solicitud
         with emp1: empresa = st.text_input("Nombre de la empresa", value=p.get("empresa",""))
         with emp2: jefe_inm = st.text_input("Jefe inmediato", value=p.get("jefe_inmediato",""))
 
-        ing1, ing2, ing3 = st.columns(3)
-        with ing1: ing_fijo     = st.text_input("Ingreso fijo $", value=p.get("ingreso_fijo", str(r.get("ingreso",""))))
-        with ing2: ing_variable = st.text_input("Ingreso variable $", value=p.get("ingreso_variable",""))
-        with ing3: ahorro       = st.text_input("Ahorro/Cheques $", value=p.get("ahorro",""))
+        ei1, ei2 = st.columns(2)
+        with ei1: fecha_ingreso = st.text_input("Fecha de ingreso a la empresa", value=p.get("fecha_ingreso",""), placeholder="DD/MM/AAAA")
+        with ei2: actividad_empresa = st.text_input("Actividad especifica de la empresa", value=p.get("actividad_empresa",""))
+
+        # CAMBIO 4 — autollenado ingresos según tipo
+        _tipo_sol = r.get("tipo_ingreso", "")
+        _ingreso_val = str(r.get("ingreso",""))
+        _default_fijo = _ingreso_val if "omina" in _tipo_sol or _tipo_sol == "Nómina" else "0"
+        _default_var  = _ingreso_val if _tipo_sol == "Independiente" else "0"
+
+        ing1, ing2, ing3, ing4 = st.columns(4)
+        with ing1: ing_fijo         = st.text_input("Ingreso fijo $",       value=p.get("ingreso_fijo",     _default_fijo))
+        with ing2: ing_variable     = st.text_input("Ingreso variable $",   value=p.get("ingreso_variable", _default_var))
+        with ing3: ahorro           = st.text_input("Ahorro/Cheques $",     value=p.get("ahorro",""))
+        with ing4: ing_acumulable   = st.text_input("Ingreso acumulable $", value=p.get("ingreso_acumulable",""))
+
+        ne1, ne2 = st.columns(2)
+        with ne1: nac_empresa  = st.selectbox("Nacionalidad empresa", ["Mexicana","Extranjera"], index=1 if p.get("nac_empresa")=="Extranjera" else 0)
+        with ne2: tipo_empresa = st.selectbox("Tipo empresa",         ["Privada","Publica"],     index=1 if p.get("tipo_empresa")=="Publica" else 0)
 
         tel_emp1, tel_emp2 = st.columns(2)
         with tel_emp1: tel_empresa = st.text_input("Telefono empresa", value=p.get("tel_empresa",""))
@@ -2242,20 +2256,41 @@ if st.session_state.get("resultado") and st.session_state.get("mostrar_solicitud
 
         descripcion_empleo = st.text_input("Descripcion del empleo o actividad", value=p.get("descripcion_empleo",""))
 
+        # DOMICILIO EMPRESA — campos faltantes (ERROR 1)
+        st.markdown('<div style="font-size:0.72rem;color:#c3002f;font-weight:600;margin-top:12px;">Domicilio de la empresa</div>', unsafe_allow_html=True)
+        de1, de2, de3 = st.columns([3,1,1])
+        with de1: dom_empresa  = st.text_input("Calle / Avenida (empresa)", value=p.get("dom_empresa",""))
+        with de2: emp_num_ext  = st.text_input("No. Ext (emp)", value=p.get("emp_num_ext",""))
+        with de3: emp_num_int  = st.text_input("No. Int (emp)", value=p.get("emp_num_int",""))
+
+        df1, df2, df3, df4 = st.columns(4)
+        with df1: emp_colonia   = st.text_input("Colonia (emp)",   value=p.get("emp_colonia",""))
+        with df2: emp_municipio = st.text_input("Municipio (emp)", value=p.get("emp_municipio",""))
+        with df3: emp_estado    = st.text_input("Estado (emp)",    value=p.get("emp_estado",""))
+        with df4: emp_cp        = st.text_input("C.P. (emp)",      value=p.get("emp_cp",""))
+
         # ─── REFERENCIAS PERSONALES ───
         st.markdown('<div class="sec-label">👥 Referencias Personales (3 obligatorias)</div>', unsafe_allow_html=True)
         refs = {}
         for i in range(1, 4):
-            st.markdown(f"<div style='font-size:0.72rem;color:#c3002f;font-weight:600;margin-top:8px;'>Referencia #{i}</div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="background:#f8f8f8;border:1px solid #e5e5e5;border-left:3px solid #c3002f;
+                border-radius:8px;padding:8px 12px 4px;margin:10px 0 4px;">
+              <span style="font-size:0.72rem;color:#c3002f;font-weight:700;
+                  text-transform:uppercase;letter-spacing:0.08em;">Referencia #{i}</span>
+            </div>
+            """, unsafe_allow_html=True)
             r1, r2, r3, r4 = st.columns(4)
-            with r1: refs[f"ref{i}_ap"]   = st.text_input(f"Apellido paterno #{i}", value=p.get(f"ref{i}_ap",""), key=f"ref_ap_{i}")
-            with r2: refs[f"ref{i}_am"]   = st.text_input(f"Apellido materno #{i}", value=p.get(f"ref{i}_am",""), key=f"ref_am_{i}")
-            with r3: refs[f"ref{i}_nom"]  = st.text_input(f"Primer nombre #{i}",     value=p.get(f"ref{i}_nom",""), key=f"ref_nom_{i}")
-            with r4: refs[f"ref{i}_parentesco"] = st.text_input(f"Parentesco #{i}",  value=p.get(f"ref{i}_parentesco",""), key=f"ref_par_{i}")
+            with r1: refs[f"ref{i}_ap"]          = st.text_input(f"Apellido paterno",  value=p.get(f"ref{i}_ap",""),          key=f"ref_ap_{i}")
+            with r2: refs[f"ref{i}_am"]          = st.text_input(f"Apellido materno",  value=p.get(f"ref{i}_am",""),          key=f"ref_am_{i}")
+            with r3: refs[f"ref{i}_nom"]         = st.text_input(f"Primer nombre",     value=p.get(f"ref{i}_nom",""),         key=f"ref_nom_{i}")
+            with r4: refs[f"ref{i}_parentesco"]  = st.text_input(f"Parentesco",        value=p.get(f"ref{i}_parentesco",""),  key=f"ref_par_{i}")
             t1, t2, t3 = st.columns(3)
-            with t1: refs[f"ref{i}_tel_fijo"] = st.text_input(f"Tel fijo #{i}",     value=p.get(f"ref{i}_tel_fijo",""), key=f"ref_tf_{i}")
-            with t2: refs[f"ref{i}_tel_cel"]  = st.text_input(f"Tel celular #{i}",   value=p.get(f"ref{i}_tel_cel",""), key=f"ref_tc_{i}")
-            with t3: refs[f"ref{i}_horario"]  = st.text_input(f"Horario localizar #{i}", value=p.get(f"ref{i}_horario",""), key=f"ref_hr_{i}")
+            # CAMBIO 5: solo celular, sin teléfono fijo
+            with t1: refs[f"ref{i}_tel_cel"]  = st.text_input(f"Celular",             value=p.get(f"ref{i}_tel_cel",""),  key=f"ref_tc_{i}")
+            with t2: refs[f"ref{i}_horario"]  = st.text_input(f"Horario localizar",   value=p.get(f"ref{i}_horario",""),  key=f"ref_hr_{i}")
+            with t3: refs[f"ref{i}_lugar"]    = st.text_input(f"Lugar de localizacion", value=p.get(f"ref{i}_lugar",""), key=f"ref_lug_{i}")
+            st.markdown("<div style='margin-bottom:4px'></div>", unsafe_allow_html=True)
 
         # ─── BOTON GENERAR / ACTUALIZAR ───
         st.markdown("<div style='margin:14px 0'></div>", unsafe_allow_html=True)
@@ -2287,6 +2322,18 @@ if st.session_state.get("resultado") and st.session_state.get("mostrar_solicitud
                 "ingreso_fijo": ing_fijo, "ingreso_variable": ing_variable, "ahorro": ahorro,
                 "tel_empresa": tel_empresa, "tel_alterno": tel_alterno,
                 "descripcion_empleo": descripcion_empleo,
+                "actividad_empresa": actividad_empresa,
+                "fecha_ingreso": fecha_ingreso,
+                "nac_empresa": nac_empresa,
+                "tipo_empresa": tipo_empresa,
+                "ingreso_acumulable": ing_acumulable,
+                "dom_empresa": dom_empresa,
+                "emp_num_ext": emp_num_ext,
+                "emp_num_int": emp_num_int,
+                "emp_colonia": emp_colonia,
+                "emp_municipio": emp_municipio,
+                "emp_estado": emp_estado,
+                "emp_cp": emp_cp,
                 **refs,
                 "score_sc": r.get("sc",""), "score_prob": r.get("prob",0),
                 "decision": r.get("decision",""),
