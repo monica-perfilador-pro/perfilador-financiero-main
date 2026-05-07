@@ -1000,17 +1000,14 @@ def generar_pdf_solicitud(d: dict) -> BytesIO:
         # Numero de referencia
         s_frect(cv, 30, ref_y-12, 14, 14, ROJO)
         s_txt(cv, str(i), 37, ref_y-3, "Helvetica-Bold", 8, white, "center")
-        # Datos
-        s_field(cv, 46,  ref_y, 110, 14, "Apellido Paterno",  d.get(prefijo+"ap",""))
-        s_field(cv, 156, ref_y, 110, 14, "Apellido Materno",  d.get(prefijo+"am",""))
-        s_field(cv, 266, ref_y, 110, 14, "Primer Nombre",     d.get(prefijo+"nom",""))
-        s_field(cv, 376, ref_y, 110, 14, "Segundo Nombre",    d.get(prefijo+"nom2",""))
-        s_field(cv, 486, ref_y, 96,  14, "Parentesco",        d.get(prefijo+"parentesco",""))
+        # PROBLEMA 3: nombre completo en un campo ancho + parentesco
+        s_field(cv, 46,  ref_y, 330, 14, "Nombre Completo",    d.get(prefijo+"nombre_completo",""))
+        s_field(cv, 376, ref_y, 206, 14, "Parentesco",         d.get(prefijo+"parentesco",""))
 
         ref_y -= 14
-        s_field(cv, 46,  ref_y, 130, 14, "Tel. Celular",      d.get(prefijo+"tel_cel",""))
-        s_field(cv, 176, ref_y, 100, 14, "Horario Localizar", d.get(prefijo+"horario",""))
-        s_field(cv, 276, ref_y, 306, 14, "Lugar Localizacion",d.get(prefijo+"lugar",""))
+        s_field(cv, 46,  ref_y, 130, 14, "Tel. Celular",       d.get(prefijo+"tel_cel",""))
+        s_field(cv, 176, ref_y, 100, 14, "Horario Localizar",  d.get(prefijo+"horario",""))
+        s_field(cv, 276, ref_y, 306, 14, "Lugar Localizacion", d.get(prefijo+"lugar",""))
         y = ref_y - 16
 
     # Footer pagina 1
@@ -1163,7 +1160,9 @@ label, [data-testid="stWidgetLabel"] p {
 }
 /* Grid pattern solo en fondo gris — no en panels */
 [data-testid="stAppViewContainer"]::before { display: none !important; }
-div[data-testid="stVerticalBlock"] { gap: 0.28rem !important; }
+div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
+/* Dentro del form de solicitud, referencias necesitan más espacio */
+[data-testid="stForm"] div[data-testid="stVerticalBlock"] { gap: 0.4rem !important; }
 
 /* ─── BOTÓN PRINCIPAL ────────────────────── */
 .stFormSubmitButton > button, .stButton > button {
@@ -2171,11 +2170,13 @@ if st.session_state.get("resultado") and st.session_state.get("mostrar_solicitud
         # ─── DATOS DEL ACREDITADO ───
         st.markdown('<div class="sec-label">👤 Datos del Acreditado</div>', unsafe_allow_html=True)
         a1, a2, a3, a4 = st.columns(4)
-        nombre_partes = (r.get("nombre","")+" ").split()
-        with a1: ap_paterno = st.text_input("Apellido paterno", value=p.get("apellido_paterno", nombre_partes[0] if len(nombre_partes)>0 else ""))
-        with a2: ap_materno = st.text_input("Apellido materno", value=p.get("apellido_materno", nombre_partes[1] if len(nombre_partes)>1 else ""))
-        with a3: pn_nombre  = st.text_input("Primer nombre",    value=p.get("primer_nombre", nombre_partes[2] if len(nombre_partes)>2 else ""))
-        with a4: sn_nombre  = st.text_input("Segundo nombre",   value=p.get("segundo_nombre", nombre_partes[3] if len(nombre_partes)>3 else ""))
+        # Defaults desde datos precargados del Sheet solamente.
+        # NO se usan partes del campo "nombre" del perfilamiento porque
+        # ese campo viene en orden "Nombre Apellido" y cruza los datos.
+        with a1: ap_paterno = st.text_input("Apellido paterno", value=p.get("apellido_paterno",""), placeholder="García")
+        with a2: ap_materno = st.text_input("Apellido materno", value=p.get("apellido_materno",""), placeholder="López")
+        with a3: pn_nombre  = st.text_input("Primer nombre",    value=p.get("primer_nombre",""),    placeholder="Juan")
+        with a4: sn_nombre  = st.text_input("Segundo nombre",   value=p.get("segundo_nombre",""),   placeholder="Carlos")
 
         b1, b2, b3, b4 = st.columns(4)
         with b1: fecha_nac = st.text_input("Fecha nacimiento", value=p.get("fecha_nacimiento",""), placeholder="DD/MM/AAAA")
@@ -2273,24 +2274,50 @@ if st.session_state.get("resultado") and st.session_state.get("mostrar_solicitud
         st.markdown('<div class="sec-label">👥 Referencias Personales (3 obligatorias)</div>', unsafe_allow_html=True)
         refs = {}
         for i in range(1, 4):
+            # Separador visual limpio entre referencias
             st.markdown(f"""
-            <div style="background:#f8f8f8;border:1px solid #e5e5e5;border-left:3px solid #c3002f;
-                border-radius:8px;padding:8px 12px 4px;margin:10px 0 4px;">
-              <span style="font-size:0.72rem;color:#c3002f;font-weight:700;
-                  text-transform:uppercase;letter-spacing:0.08em;">Referencia #{i}</span>
+            <div style="border-top:{'2px solid #c3002f' if i==1 else '1px solid #e5e5e5'};
+                margin:{'12px 0 10px' if i==1 else '16px 0 10px'};
+                display:flex;align-items:center;gap:8px;">
+              <span style="background:#c3002f;color:#fff;font-size:0.68rem;font-weight:700;
+                  padding:2px 8px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">
+                REF {i}
+              </span>
             </div>
             """, unsafe_allow_html=True)
-            r1, r2, r3, r4 = st.columns(4)
-            with r1: refs[f"ref{i}_ap"]          = st.text_input(f"Apellido paterno",  value=p.get(f"ref{i}_ap",""),          key=f"ref_ap_{i}")
-            with r2: refs[f"ref{i}_am"]          = st.text_input(f"Apellido materno",  value=p.get(f"ref{i}_am",""),          key=f"ref_am_{i}")
-            with r3: refs[f"ref{i}_nom"]         = st.text_input(f"Primer nombre",     value=p.get(f"ref{i}_nom",""),         key=f"ref_nom_{i}")
-            with r4: refs[f"ref{i}_parentesco"]  = st.text_input(f"Parentesco",        value=p.get(f"ref{i}_parentesco",""),  key=f"ref_par_{i}")
-            t1, t2, t3 = st.columns(3)
-            # CAMBIO 5: solo celular, sin teléfono fijo
-            with t1: refs[f"ref{i}_tel_cel"]  = st.text_input(f"Celular",             value=p.get(f"ref{i}_tel_cel",""),  key=f"ref_tc_{i}")
-            with t2: refs[f"ref{i}_horario"]  = st.text_input(f"Horario localizar",   value=p.get(f"ref{i}_horario",""),  key=f"ref_hr_{i}")
-            with t3: refs[f"ref{i}_lugar"]    = st.text_input(f"Lugar de localizacion", value=p.get(f"ref{i}_lugar",""), key=f"ref_lug_{i}")
-            st.markdown("<div style='margin-bottom:4px'></div>", unsafe_allow_html=True)
+            # PROBLEMA 3: nombre completo en un solo campo
+            rn1, rn2 = st.columns([3, 1])
+            with rn1: refs[f"ref{i}_nombre_completo"] = st.text_input(
+                "Nombre completo",
+                value=p.get(f"ref{i}_nombre_completo", ""),
+                placeholder="Apellido Paterno Apellido Materno Nombre(s)",
+                key=f"ref_nombre_{i}"
+            )
+            with rn2: refs[f"ref{i}_parentesco"] = st.text_input(
+                "Parentesco",
+                value=p.get(f"ref{i}_parentesco", ""),
+                placeholder="Ej: Hermano",
+                key=f"ref_par_{i}"
+            )
+            rt1, rt2, rt3 = st.columns(3)
+            with rt1: refs[f"ref{i}_tel_cel"] = st.text_input(
+                "Celular",
+                value=p.get(f"ref{i}_tel_cel", ""),
+                placeholder="10 dígitos",
+                key=f"ref_tc_{i}"
+            )
+            with rt2: refs[f"ref{i}_horario"] = st.text_input(
+                "Horario para localizar",
+                value=p.get(f"ref{i}_horario", ""),
+                placeholder="Ej: 9am-6pm",
+                key=f"ref_hr_{i}"
+            )
+            with rt3: refs[f"ref{i}_lugar"] = st.text_input(
+                "Lugar de localización",
+                value=p.get(f"ref{i}_lugar", ""),
+                placeholder="Ej: Casa / Trabajo",
+                key=f"ref_lug_{i}"
+            )
 
         # ─── BOTON GENERAR / ACTUALIZAR ───
         st.markdown("<div style='margin:14px 0'></div>", unsafe_allow_html=True)
