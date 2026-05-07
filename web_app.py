@@ -1480,18 +1480,7 @@ with _bcol2:
 with _bcol3:
     # CAMBIO 2 — Botón + NUEVA con lógica completa de limpieza
     if st.button("＋ Nueva", key="btn_nueva_global", use_container_width=True):
-        # Limpiar TODO el estado relacionado con cliente/análisis
-        claves_a_limpiar = [
-            "resultado", "cotitular_activo", "cotitular_resultado",
-            "datos_precargados", "folio_actual", "folio_perfil_actual",
-            "mostrar_solicitud", "pdf_solicitud_buf", "pdf_solicitud_nombre",
-            "perfil_duplicado", "datos_perfil_pending",
-            "decision_duplicado_tomada", "mostrar_estrategia",
-            "datos_form_precargados", "ingreso", "mensualidad",
-        ]
-        for _k in claves_a_limpiar:
-            if _k in st.session_state:
-                del st.session_state[_k]
+        st.session_state.clear()
         st.rerun()
 
 # Indicador de modo edición activo
@@ -2367,6 +2356,8 @@ if st.session_state.get("resultado") and st.session_state.get("mostrar_solicitud
             }
             buf_sol = generar_pdf_solicitud(datos_sol)
             st.session_state.pdf_solicitud_buf = buf_sol.getvalue()
+            # Persistir datos_sol para que los campos no queden vacíos en el siguiente rerun
+            st.session_state.datos_precargados = datos_sol
 
             if es_actualizacion:
                 # Actualizar fila existente
