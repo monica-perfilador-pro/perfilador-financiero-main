@@ -2165,13 +2165,18 @@ if st.session_state.get("resultado") and st.session_state.get("mostrar_solicitud
         # ─── DATOS DEL ACREDITADO ───
         st.markdown('<div class="sec-label">👤 Datos del Acreditado</div>', unsafe_allow_html=True)
         a1, a2, a3, a4 = st.columns(4)
-        # Defaults desde datos precargados del Sheet solamente.
-        # NO se usan partes del campo "nombre" del perfilamiento porque
-        # ese campo viene en orden "Nombre Apellido" y cruza los datos.
-        with a1: ap_paterno = st.text_input("Apellido paterno", value=p.get("apellido_paterno",""), placeholder="García")
-        with a2: ap_materno = st.text_input("Apellido materno", value=p.get("apellido_materno",""), placeholder="López")
-        with a3: pn_nombre  = st.text_input("Primer nombre",    value=p.get("primer_nombre",""),    placeholder="Juan")
-        with a4: sn_nombre  = st.text_input("Segundo nombre",   value=p.get("segundo_nombre",""),   placeholder="Carlos")
+        # Prioridad: 1) datos del Sheet (p), 2) nombre del perfilamiento partido en partes
+        # El asesor puede corregir el orden si es necesario
+        _nombre_raw = (r.get("nombre","") or "").strip().split()
+        _def_ap  = p.get("apellido_paterno", _nombre_raw[0] if len(_nombre_raw)>0 else "")
+        _def_am  = p.get("apellido_materno", _nombre_raw[1] if len(_nombre_raw)>1 else "")
+        _def_pn  = p.get("primer_nombre",    _nombre_raw[2] if len(_nombre_raw)>2 else "")
+        _def_sn  = p.get("segundo_nombre",   _nombre_raw[3] if len(_nombre_raw)>3 else "")
+        st.caption("⚠️ Verifica el orden: el nombre se tomó del perfilamiento. Corrige si es necesario.")
+        with a1: ap_paterno = st.text_input("Apellido paterno", value=_def_ap, placeholder="García")
+        with a2: ap_materno = st.text_input("Apellido materno", value=_def_am, placeholder="López")
+        with a3: pn_nombre  = st.text_input("Primer nombre",    value=_def_pn, placeholder="Juan")
+        with a4: sn_nombre  = st.text_input("Segundo nombre",   value=_def_sn, placeholder="Carlos")
 
         b1, b2, b3, b4 = st.columns(4)
         with b1: fecha_nac = st.text_input("Fecha nacimiento", value=p.get("fecha_nacimiento",""), placeholder="DD/MM/AAAA")
