@@ -1478,9 +1478,10 @@ with _bcol2:
         else:
             st.warning("Ingresa un folio")
 with _bcol3:
-    # CAMBIO 2 — Botón + NUEVA con lógica completa de limpieza
     if st.button("＋ Nueva", key="btn_nueva_global", use_container_width=True):
+        _ver = st.session_state.get("_form_ver", 0) + 1
         st.session_state.clear()
+        st.session_state["_form_ver"] = _ver
         st.rerun()
 
 # Indicador de modo edición activo
@@ -1507,7 +1508,10 @@ with col_izq:
         st.image("AUTOSCOREIA.png", use_container_width=True)
     st.markdown("<div style='margin-bottom:8px;'></div>", unsafe_allow_html=True)
 
-    with st.form("formulario"):
+    # _fv cambia cada vez que se presiona + Nueva, forzando recreación de widgets
+    _fv = st.session_state.get("_form_ver", 0)
+
+    with st.form(f"formulario_{_fv}"):
 
         # ASESOR — ahora dentro del form para alineación consistente
         st.markdown('<div class="sec-label">👤 Datos del Asesor</div>', unsafe_allow_html=True)
@@ -2139,8 +2143,10 @@ if st.session_state.get("resultado") and st.session_state.get("mostrar_solicitud
 
     # Atajo a datos precargados (el buscador está arriba en la app)
     p = st.session_state.datos_precargados or {}
+    # _pv cambia cuando p cambia, forzando recreación de widgets con nuevos valores
+    _pv = hash(str(sorted(p.items()))) % 100000 if p else 0
 
-    with st.form("form_solicitud"):
+    with st.form(f"form_solicitud_{_pv}"):
         # ─── DATOS DEL ASESOR Y FUENTE DE VENTA ───
         st.markdown('<div class="sec-label">👔 Datos del Asesor y Fuente de Venta</div>', unsafe_allow_html=True)
         sa1, sa2, sa3 = st.columns([2,1,1])
