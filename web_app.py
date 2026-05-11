@@ -718,6 +718,259 @@ GRIS_CLARO  = HexColor("#cccccc")
 GRIS_FONDO  = HexColor("#f5f5f5")
 GRIS_BLOCK  = HexColor("#e8e8e8")  # franjas de seccion
 
+
+# ════════════════════════════════════════════════════════════════
+# PDF F&I — Reporte interno de perfil para el área de F&I
+# ════════════════════════════════════════════════════════════════
+def generar_pdf_fi(r: dict) -> BytesIO:
+    """
+    Genera reporte interno de perfil crediticio para F&I.
+    Incluye: datos del cliente, perfil financiero capturado,
+    historial crediticio y resultado completo del motor.
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.colors import HexColor, black
+    import datetime
+
+    _W, _H = letter
+    _M = 36
+    _buf = BytesIO()
+    _cv = canvas.Canvas(_buf, pagesize=letter)
+    _cv.setTitle("AutoScore AI — Reporte F&I")
+
+    _ROJO   = HexColor("#c3002f")
+    _NEGRO  = HexColor("#111111")
+    _GRIS1  = HexColor("#333333")
+    _GRIS2  = HexColor("#666666")
+    _GRIS3  = HexColor("#cccccc")
+    _GRISF  = HexColor("#f5f5f5")
+    _BLANCO = HexColor("#ffffff")
+
+    SC_COLOR_FI = {
+        "AZUL":     HexColor("#0369a1"),
+        "VERDE":    HexColor("#166534"),
+        "AMARILLO": HexColor("#854d0e"),
+        "NARANJA":  HexColor("#9a3412"),
+        "ROJO":     HexColor("#9f1239"),
+    }
+    SC_BG_FI = {
+        "AZUL":     HexColor("#eff8ff"),
+        "VERDE":    HexColor("#f0fdf4"),
+        "AMARILLO": HexColor("#fefce8"),
+        "NARANJA":  HexColor("#fff7ed"),
+        "ROJO":     HexColor("#fff5f5"),
+    }
+
+    def _frect(x, y, w, h, color, stroke=False, stroke_color=None):
+        _cv.setFillColor(color)
+        if stroke and stroke_color:
+            _cv.setStrokeColor(stroke_color)
+            _cv.setLineWidth(0.5)
+            _cv.rect(x, y, w, h, fill=1, stroke=1)
+        else:
+            _cv.rect(x, y, w, h, fill=1, stroke=0)
+
+    def _txt(s, x, y, font="Helvetica", size=8, color=None, align="left"):
+        _cv.setFont(font, size)
+        _cv.setFillColor(color or _NEGRO)
+        s = str(s)
+        if align == "center": _cv.drawCentredString(x, y, s)
+        elif align == "right": _cv.drawRightString(x, y, s)
+        else: _cv.drawString(x, y, s)
+
+    def _hline(y, x1=None, x2=None, color=None, lw=0.4):
+        _cv.setStrokeColor(color or _GRIS3)
+        _cv.setLineWidth(lw)
+        _cv.line(x1 or _M, y, x2 or (_W - _M), y)
+
+    def _section(y, titulo):
+        """Banda gris con título de sección."""
+        _frect(_M, y - 13, _W - 2*_M, 15, _GRISF)
+        _cv.setStrokeColor(_GRIS3); _cv.setLineWidth(0.4)
+        _cv.rect(_M, y - 13, _W - 2*_M, 15, fill=0, stroke=1)
+        _frect(_M, y - 13, 3, 15, _ROJO)
+        _txt(titulo, _M + 8, y - 5, "Helvetica-Bold", 7.5, _NEGRO)
+        return y - 18
+
+    def _row(x, y, w, h, label, value, bg=None):
+        """Campo con etiqueta y valor."""
+        if bg:
+            _frect(x, y - h, w, h, bg)
+        _cv.setStrokeColor(_GRIS3); _cv.setLineWidth(0.3)
+        _cv.rect(x, y - h, w, h, fill=0, stroke=1)
+        _txt(label, x + 3, y - 4, "Helvetica", 5.5, _GRIS2)
+        _txt(str(value)[:45], x + 3, y - h + 3, "Helvetica-Bold", 7, _NEGRO)
+
+    fecha = datetime.date.today().strftime("%d/%m/%Y")
+    sc    = r.get("sc", "AMARILLO")
+    y     = _H - _M
+
+    # ── HEADER ──────────────────────────────────────────────────
+    _frect(0, _H - 44, _W, 44, _NEGRO)
+    _frect(0, _H - 2, _W, 2, _ROJO)
+    _txt("AutoScore AI", _M, _H - 18, "Helvetica-Bold", 16, _BLANCO)
+    w_as = _cv.stringWidth("AutoScore AI", "Helvetica-Bold", 16)
+    _txt("  ·  REPORTE INTERNO F&I", _M + w_as, _H - 18, "Helvetica", 10, HexColor("#888888"))
+    _txt(f"Fecha: {fecha}", _W - _M, _H - 18, "Helvetica", 8, HexColor("#888888"), "right")
+    _txt("USO INTERNO — Confidencial", _W - _M, _H - 30, "Helvetica-Oblique", 7, HexColor("#666666"), "right")
+    _txt(f"Motor: {r.get('version_motor','v3')}", _M, _H - 30, "Helvetica", 7, HexColor("#666666"))
+    y = _H - 52
+
+    # ── RESULTADO DESTACADO ──────────────────────────────────────
+    sc_bg  = SC_BG_FI.get(sc, HexColor("#f5f5f5"))
+    sc_col = SC_COLOR_FI.get(sc, _NEGRO)
+    _frect(_M, y - 48, _W - 2*_M, 50, sc_bg, stroke=True, stroke_color=sc_col)
+    _frect(_M, y - 48, 4, 50, sc_col)
+
+    _txt("DECISIÓN DEL MOTOR", _M + 10, y - 8, "Helvetica-Bold", 7, sc_col)
+    _txt(r.get("decision", "—"), _M + 10, y - 20, "Helvetica-Bold", 12, sc_col)
+    _txt(f"Plan: {r.get('plan','—')}  ·  Financiera: {r.get('financiera','—')}", _M + 10, y - 32, "Helvetica", 7.5, sc_col)
+    _txt(f"Temperatura: {r.get('temp','—')}", _M + 10, y - 42, "Helvetica", 7, _GRIS2)
+
+    # Score y probabilidad — lado derecho del banner
+    _txt(f"{r.get('prob',0)}%", _W - _M - 10, y - 16, "Helvetica-Bold", 22, sc_col, "right")
+    _txt("PROBABILIDAD", _W - _M - 10, y - 28, "Helvetica", 6.5, sc_col, "right")
+    _txt(f"Score: {sc}  ·  Pts: {r.get('score',0)}", _W - _M - 10, y - 40, "Helvetica-Bold", 7.5, sc_col, "right")
+    y -= 58
+
+    # ── MÉTRICAS FINANCIERAS ─────────────────────────────────────
+    _col_w = (_W - 2*_M) / 3
+    for i, (lbl, val) in enumerate([
+        ("Capacidad de pago", f"${r.get('cap_pago',0):,.0f}"),
+        ("Mensualidad estimada", f"${r.get('mensualidad',0):,.0f}"),
+        ("Enganche", f"{r.get('enganche_pct',0):.1f}%"),
+    ]):
+        _row(_M + i*_col_w, y, _col_w, 22, lbl, val, _GRISF)
+    y -= 28
+
+    # ── DATOS DEL CLIENTE ────────────────────────────────────────
+    y = _section(y, "DATOS DEL CLIENTE")
+    _cw2 = (_W - 2*_M) / 2
+    _cw4 = (_W - 2*_M) / 4
+    _row(_M,        y, _cw2, 18, "Nombre",   r.get("nombre","—"))
+    _row(_M+_cw2,   y, _cw2, 18, "Teléfono", r.get("telefono","—"))
+    y -= 20
+    _row(_M,        y, _cw2, 18, "Correo",   r.get("correo","—"))
+    _row(_M+_cw2,   y, _cw4, 18, "Asesor",   r.get("asesor","—"))
+    _row(_M+_cw2+_cw4, y, _cw4, 18, "Tel. Asesor", r.get("telefono_asesor","—"))
+    y -= 26
+
+    # ── PERFIL FINANCIERO ────────────────────────────────────────
+    y = _section(y, "PERFIL FINANCIERO CAPTURADO")
+    _datos_form = r.get("datos_form", {})
+
+    _row(_M,            y, _cw4, 18, "Ingreso mensual",   f"${float(r.get('ingreso',0) or _datos_form.get('ingreso',0)):,.0f}")
+    _row(_M+_cw4,       y, _cw4, 18, "Tipo ingreso",      _datos_form.get("tipo_ingreso", "—"))
+    _row(_M+2*_cw4,     y, _cw4, 18, "Edad",              _datos_form.get("edad","—"))
+    _row(_M+3*_cw4,     y, _cw4, 18, "Antigüedad dom.",   {1:"<1 año",2:"1-3 años",3:"+3 años"}.get(_datos_form.get("domicilio",0),"—"))
+    y -= 20
+    _row(_M,            y, _cw4, 18, "Precio vehículo",   f"${float(_datos_form.get('precio',0)):,.0f}")
+    _row(_M+_cw4,       y, _cw4, 18, "Enganche",          f"${float(_datos_form.get('enganche',0)):,.0f}  ({r.get('enganche_pct',0):.1f}%)")
+    _row(_M+2*_cw4,     y, _cw4, 18, "Plazo",             f"{_datos_form.get('plazo','—')} meses")
+    _row(_M+3*_cw4,     y, _cw4, 18, "Consultas buró",    _datos_form.get("consultas","—"))
+    y -= 26
+
+    # ── HISTORIAL CREDITICIO ─────────────────────────────────────
+    y = _section(y, "HISTORIAL CREDITICIO")
+
+    def _si_no(v): return "Sí" if v == 1 else "No"
+    def _mop(v):   return {1:"Al corriente",2:"31-60d (MOP2)",3:"+61d (MOP3)"}.get(v,"—")
+    def _hip(v):   return {1:"Bancario",2:"Infonavit",3:"No tiene"}.get(v,"—")
+
+    _row(_M,            y, _cw4, 18, "CrediNissan",        _si_no(_datos_form.get("credinissan",2)))
+    _row(_M+_cw4,       y, _cw4, 18, "Auto previo",        _si_no(_datos_form.get("auto",2)))
+    _row(_M+2*_cw4,     y, _cw4, 18, "Hipotecario",        _hip(_datos_form.get("hipotecario",3)))
+    _row(_M+3*_cw4,     y, _cw4, 18, "Atrasos buró",       _mop(_datos_form.get("atrasos",1)))
+    y -= 20
+    _row(_M,            y, _cw4, 18, "Tarjeta >$100K",     _si_no(_datos_form.get("tarjeta_alta",2)))
+    _row(_M+_cw4,       y, _cw4, 18, "Tarjeta <$100K",     _si_no(_datos_form.get("tarjeta_baja",2)))
+    _row(_M+2*_cw4,     y, _cw4, 18, "Perfil interno",     r.get("perfil","—"))
+    _row(_M+3*_cw4,     y, _cw4, 18, "Score pts",          r.get("score","—"))
+    y -= 26
+
+    # ── PRESIÓN FINANCIERA Y ESTABILIDAD ─────────────────────────
+    y = _section(y, "PRESIÓN FINANCIERA Y ESTABILIDAD (v3.1)")
+
+    def _ant_emp(v): return {0:"N/A",1:"<6 meses",2:"6m-2a",3:"2-5 años",4:"+5 años"}.get(v,"—")
+    def _ant_his(v): return {0:"Sin créd.",1:"<1 año",2:"1-3 años",3:"3-7 años",4:"+7 años"}.get(v,"—")
+    def _util(v):    return {0:"Sin tarjetas",10:"Poco (<30%)",40:"~50%",70:">60%",90:"Al tope"}.get(v,f"{v}%")
+    def _deuda(v):   return {0:"Sin deudas",1:"Baja",2:"Media",3:"Alta"}.get(v,"—")
+
+    _row(_M,            y, _cw4, 18, "Utiliz. revolvente", _util(_datos_form.get("utilizacion_revolvente",0)))
+    _row(_M+_cw4,       y, _cw4, 18, "Productos activos",  _datos_form.get("productos_activos","—"))
+    _row(_M+2*_cw4,     y, _cw4, 18, "Nivel deuda",        _deuda(_datos_form.get("nivel_deuda_actual",0)))
+    _row(_M+3*_cw4,     y, _cw4, 18, "Consultas rec.",     _datos_form.get("consultas_recientes","—"))
+    y -= 20
+    _row(_M,            y, _cw2, 18, "Antigüedad empleo",  _ant_emp(_datos_form.get("antiguedad_empleo",3)))
+    _row(_M+_cw2,       y, _cw2, 18, "Antigüedad historial", _ant_his(_datos_form.get("antiguedad_historial",2)))
+    y -= 26
+
+    # ── CONDICIONAMIENTOS Y ALERTAS ──────────────────────────────
+    y = _section(y, "CONDICIONAMIENTOS Y ALERTAS")
+
+    conds = r.get("condicionamientos", [])
+    if conds:
+        for i, cond in enumerate(conds):
+            _cv.setFillColor(HexColor("#dc2626"))
+            _cv.setFont("Helvetica-Bold", 6)
+            _cv.drawString(_M + 5, y - 5 - i*11, f"• {cond}")
+        y -= len(conds) * 11 + 6
+    else:
+        _txt("Sin condicionamientos", _M + 5, y - 8, "Helvetica", 7, HexColor("#166534"))
+        y -= 14
+
+    # Alertas
+    alertas_fi = []
+    if r.get("alerta_cotitular"): alertas_fi.append("Requiere cotitular")
+    if r.get("alerta_ingresos"):  alertas_fi.append("Validar ingresos")
+    if r.get("alerta_investigacion"): alertas_fi.append(r.get("inv","Investigación"))
+
+    if alertas_fi:
+        _txt("Alertas: " + "  ·  ".join(alertas_fi), _M + 5, y - 5, "Helvetica-Bold", 7, HexColor("#9a3412"))
+        y -= 14
+
+    y -= 4
+
+    # ── MENSAJE ASESOR ───────────────────────────────────────────
+    y = _section(y, "RECOMENDACIÓN INTERNA MOTOR")
+    msg_a = r.get("msg_a", "—")
+    _cv.setFont("Helvetica", 7)
+    _cv.setFillColor(_GRIS1)
+    # Word wrap manual
+    words = msg_a.split()
+    line, cy = "", y - 8
+    max_w = _W - 2*_M - 10
+    for word in words:
+        test = (line + " " + word).strip()
+        if _cv.stringWidth(test, "Helvetica", 7) <= max_w:
+            line = test
+        else:
+            _cv.drawString(_M + 5, cy, line)
+            cy -= 10; line = word
+    if line:
+        _cv.drawString(_M + 5, cy, line)
+    y = cy - 14
+
+    # ── DOCUMENTACIÓN ───────────────────────────────────────────
+    y = _section(y, "DOCUMENTACIÓN REQUERIDA")
+    docs = r.get("docs", [])
+    docs_txt = "  ·  ".join(docs) if docs else "—"
+    _txt(docs_txt, _M + 5, y - 8, "Helvetica", 7, _GRIS1)
+    y -= 18
+
+    # ── FOOTER ──────────────────────────────────────────────────
+    _hline(30, lw=0.5)
+    _txt("AutoScore AI · Reporte interno F&I · USO CONFIDENCIAL", _W/2, 20, "Helvetica", 6.5, _GRIS2, "center")
+    _txt(f"Generado: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}", _W - _M, 20, "Helvetica", 6.5, _GRIS2, "right")
+    _frect(0, 0, _W, 4, _ROJO)
+
+    _cv.showPage()
+    _cv.save()
+    _buf.seek(0)
+    return _buf
+
+
 def s_frect(c, x, y, w, h, color, lw=0):
     c.setFillColor(color)
     c.rect(x, y, w, h, fill=1, stroke=0)
@@ -1789,9 +2042,13 @@ if submitted:
         "antiguedad_empleo": int(antiguedad_empleo),
         "antiguedad_historial": int(antiguedad_historial),
     }
+    # Guardar datos_form en resultado para que el PDF F&I pueda leerlos
+    st.session_state.resultado["datos_form"] = datos_form_completo
+    st.session_state.resultado["ingreso"]     = float(ingreso)
+    st.session_state.resultado["tipo_ingreso"]= tipo_ingreso
+
     # Detectar perfil duplicado del mismo cliente en últimas 24h
     datos_perfil = {**st.session_state.resultado,
-        "ingreso": ingreso, "tipo_ingreso": tipo_ingreso,
         "enganche_pct": st.session_state.resultado.get("enganche_pct", 0),
         "datos_form": datos_form_completo}
 
@@ -2113,6 +2370,16 @@ with col_der:
                 file_name=f"autoscore_{(r.get('nombre','cliente') or 'cliente').replace(' ','_')}.pdf",
                 mime="application/pdf",
                 use_container_width=True
+            )
+            # ── PDF F&I ──────────────────────────────────────────
+            buf_fi = generar_pdf_fi(r)
+            st.download_button(
+                "📊 Descargar Reporte F&I",
+                data=buf_fi.getvalue(),
+                file_name=f"reporte_fi_{(r.get('nombre','cliente') or 'cliente').replace(' ','_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="dl_fi"
             )
 
         # ── GENERAR SOLICITUD DE CREDITO ─────────────────────────────
